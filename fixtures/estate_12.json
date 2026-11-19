@@ -1,0 +1,990 @@
+[
+ {
+  "id": "wf00",
+  "name": "Invoice intake",
+  "active": true,
+  "nodes": [
+   {
+    "name": "OVH IMAP - invoices",
+    "type": "n8n-nodes-base.emailReadImap",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "mailbox": "INBOX/invoices"
+    },
+    "credentials": {
+     "imap": {
+      "id": "cred-imap",
+      "name": "OVH IMAP"
+     }
+    }
+   },
+   {
+    "name": "Extract invoice",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "jsCode": "return items.map(i => ({ json: i.binary }))"
+    }
+   },
+   {
+    "name": "POST invoice to Odoo",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "https://odoo.example.ca/api/invoices",
+     "sendBody": true
+    }
+   }
+  ],
+  "connections": {
+   "OVH IMAP - invoices": {
+    "main": [
+     [
+      {
+       "node": "Extract invoice",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Extract invoice": {
+    "main": [
+     [
+      {
+       "node": "POST invoice to Odoo",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf01",
+  "name": "Invoice intake copy",
+  "active": true,
+  "nodes": [
+   {
+    "name": "OVH IMAP - invoices",
+    "type": "n8n-nodes-base.emailReadImap",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "mailbox": "INBOX/invoices"
+    },
+    "credentials": {
+     "imap": {
+      "id": "cred-imap",
+      "name": "OVH IMAP"
+     }
+    }
+   },
+   {
+    "name": "Dedupe by messageId",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "jsCode": "const seen = new Set(); return items.filter(i => { const id = i.json.messageId; if (seen.has(id)) return false; seen.add(id); return true; });"
+    }
+   },
+   {
+    "name": "Append to ledger",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "append",
+     "spreadsheetId": "{{$env.LEDGER_ID}}",
+     "sheetName": "Invoices"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "OVH IMAP - invoices": {
+    "main": [
+     [
+      {
+       "node": "Dedupe by messageId",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Dedupe by messageId": {
+    "main": [
+     [
+      {
+       "node": "Append to ledger",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf02",
+  "name": "Sheets exporter",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Nightly 06:00",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "cronExpression": "0 6 * * *"
+    }
+   },
+   {
+    "name": "Export jobs to sheet",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "append",
+     "spreadsheetId": "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+     "sheetName": "Jobs"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "Nightly 06:00": {
+    "main": [
+     [
+      {
+       "node": "Export jobs to sheet",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf03",
+  "name": "Drive archive",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Webhook - archive",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "path": "archive"
+    }
+   },
+   {
+    "name": "Push metadata to Airtable",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "https://api.airtable.com/v0/appX/Tbl",
+     "apiKey": "Bearer test-only-token-0000",
+     "sendBody": true
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "Webhook - archive": {
+    "main": [
+     [
+      {
+       "node": "Push metadata to Airtable",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf04",
+  "name": "Prototype - supplier scores",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Read supplier sheet",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "read",
+     "spreadsheetId": "{{$env.SUPPLIERS_ID}}"
+    }
+   },
+   {
+    "name": "Shape rows",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "values": {
+      "string": [
+       {
+        "name": "supplier",
+        "value": "={{$json.supplier}}"
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "connections": {
+   "Read supplier sheet": {
+    "main": [
+     [
+      {
+       "node": "Shape rows",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf05",
+  "name": "Attachment parser",
+  "active": true,
+  "nodes": [
+   {
+    "name": "OVH IMAP - attachments",
+    "type": "n8n-nodes-base.emailReadImap",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "mailbox": "INBOX/attachments"
+    },
+    "credentials": {
+     "imap": {
+      "id": "cred-imap",
+      "name": "OVH IMAP"
+     }
+    }
+   },
+   {
+    "name": "Dedupe by messageId",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "jsCode": "const seen = new Set(); return items.filter(i => { const id = i.json.messageId; if (seen.has(id)) return false; seen.add(id); return true; });"
+    }
+   },
+   {
+    "name": "Only PDFs",
+    "type": "n8n-nodes-base.filter",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "conditions": {
+      "string": [
+       {
+        "value1": "={{$json.fileName}}",
+        "operation": "contains",
+        "value2": ".pdf"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "Store PDF",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "https://files.example.ca/upload"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "OVH IMAP - attachments": {
+    "main": [
+     [
+      {
+       "node": "Dedupe by messageId",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Dedupe by messageId": {
+    "main": [
+     [
+      {
+       "node": "Only PDFs",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Only PDFs": {
+    "main": [
+     [
+      {
+       "node": "Store PDF",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf06",
+  "name": "Router - client requests",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Webhook - requests",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "path": "client-requests"
+    }
+   },
+   {
+    "name": "Route by type",
+    "type": "n8n-nodes-base.switch",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "rules": {
+      "values": [
+       {
+        "conditions": {
+         "string": [
+          {
+           "value1": "={{$json.type}}",
+           "operation": "equals",
+           "value2": "support"
+          }
+         ]
+        }
+       },
+       {
+        "conditions": {
+         "string": [
+          {
+           "value1": "={{$json.type}}",
+           "operation": "equals",
+           "value2": "billing"
+          }
+         ]
+        }
+       },
+       {
+        "conditions": {
+         "string": [
+          {
+           "value1": "={{$json.type}}",
+           "operation": "equals",
+           "value2": "sales"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "Support queue",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "values": {
+      "string": [
+       {
+        "name": "queue",
+        "value": "support"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "Billing queue",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "values": {
+      "string": [
+       {
+        "name": "queue",
+        "value": "billing"
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "connections": {
+   "Webhook - requests": {
+    "main": [
+     [
+      {
+       "node": "Route by type",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Route by type": {
+    "main": [
+     [
+      {
+       "node": "Support queue",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Billing queue",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf07",
+  "name": "Airtable writer - clients",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Weekly 07:00",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "cronExpression": "0 7 * * 1"
+    }
+   },
+   {
+    "name": "Create client record",
+    "type": "n8n-nodes-base.airtable",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "create",
+     "baseId": "{{$env.BASE}}",
+     "table": "Clients"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "Weekly 07:00": {
+    "main": [
+     [
+      {
+       "node": "Create client record",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf08",
+  "name": "Sales sync",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Every 15 minutes",
+    "type": "n8n-nodes-base.interval",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "interval": 15
+    }
+   },
+   {
+    "name": "PUT contacts to CRM",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "PUT",
+     "url": "https://crm.example.ca/contacts"
+    },
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "Every 15 minutes": {
+    "main": [
+     [
+      {
+       "node": "PUT contacts to CRM",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf09",
+  "name": "Report builder",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Daily 08:00",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "cronExpression": "0 8 * * *"
+    }
+   },
+   {
+    "name": "Read jobs",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "read",
+     "spreadsheetId": "{{$env.JOBS_ID}}"
+    }
+   },
+   {
+    "name": "Build summary",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "jsCode": "return items;"
+    }
+   },
+   {
+    "name": "Get draft thread",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "get",
+     "messageId": "={{$json.threadId}}"
+    }
+   },
+   {
+    "name": "Send summary",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "send",
+     "to": "owner@example.ca"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "Daily 08:00": {
+    "main": [
+     [
+      {
+       "node": "Read jobs",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Read jobs": {
+    "main": [
+     [
+      {
+       "node": "Build summary",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Build summary": {
+    "main": [
+     [
+      {
+       "node": "Get draft thread",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Get draft thread": {
+    "main": [
+     [
+      {
+       "node": "Send summary",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf10",
+  "name": "Sheets backup",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Weekly Sunday 09:00",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "cronExpression": "0 9 * * 0"
+    }
+   },
+   {
+    "name": "Read ledger",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "read",
+     "spreadsheetId": "{{$env.LEDGER_ID}}"
+    }
+   },
+   {
+    "name": "Fetch archive index",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "GET",
+     "url": "https://odoo.example.ca/api/index"
+    }
+   }
+  ],
+  "connections": {
+   "Weekly Sunday 09:00": {
+    "main": [
+     [
+      {
+       "node": "Read ledger",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Read ledger": {
+    "main": [
+     [
+      {
+       "node": "Fetch archive index",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf11",
+  "name": "Mail triage - support",
+  "active": true,
+  "nodes": [
+   {
+    "name": "OVH IMAP - support",
+    "type": "n8n-nodes-base.emailReadImap",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "mailbox": "INBOX/support"
+    },
+    "credentials": {
+     "imap": {
+      "id": "cred-imap",
+      "name": "OVH IMAP"
+     }
+    }
+   },
+   {
+    "name": "Dedupe by messageId",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "jsCode": "const seen = new Set(); return items.filter(i => { const id = i.json.messageId; if (seen.has(id)) return false; seen.add(id); return true; });"
+    }
+   },
+   {
+    "name": "Urgency switch",
+    "type": "n8n-nodes-base.switch",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "rules": {
+      "values": [
+       {
+        "conditions": {
+         "string": [
+          {
+           "value1": "={{$json.priority}}",
+           "operation": "equals",
+           "value2": "high"
+          }
+         ]
+        }
+       }
+      ]
+     },
+     "options": {
+      "fallbackOutput": "extra"
+     }
+    }
+   },
+   {
+    "name": "Escalate",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "https://crm.example.ca/escalations"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   },
+   {
+    "name": "File to sheet",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "append",
+     "spreadsheetId": "{{$env.TRIAGE_ID}}"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   },
+   {
+    "name": "Ping CRM",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "GET",
+     "url": "https://crm.example.ca/ping"
+    }
+   }
+  ],
+  "connections": {
+   "OVH IMAP - support": {
+    "main": [
+     [
+      {
+       "node": "Dedupe by messageId",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Dedupe by messageId": {
+    "main": [
+     [
+      {
+       "node": "Urgency switch",
+       "type": "main",
+       "index": 0
+      },
+      {
+       "node": "Ping CRM",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Urgency switch": {
+    "main": [
+     [
+      {
+       "node": "Escalate",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "File to sheet",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "File to sheet",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ }
+]

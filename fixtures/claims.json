@@ -1,0 +1,30 @@
+{
+  "source": "synthetic client beliefs, written for the fixture estate",
+  "claims": [
+    {
+      "claim_id": "C1",
+      "workflow_name": "Invoice intake",
+      "claim": "The invoice intake posts every invoice to the ERP"
+    },
+    {
+      "claim_id": "C2",
+      "workflow_name": "Invoice intake copy",
+      "claim": "Nothing runs twice when the same email arrives"
+    },
+    {
+      "claim_id": "C3",
+      "workflow_name": "Mail triage - support",
+      "claim": "Support mail is triaged and filed"
+    },
+    {
+      "claim_id": "C4",
+      "workflow_name": "Report builder",
+      "claim": "The 08:00 report goes out every day"
+    },
+    {
+      "claim_id": "C5",
+      "workflow_name": "Sheets backup",
+      "claim": "The ledger sheet is backed up weekly"
+    }
+  ]
+}

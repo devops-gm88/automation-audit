@@ -1,0 +1,379 @@
+[
+ {
+  "id": "wf00",
+  "name": "Invoice intake",
+  "active": true,
+  "nodes": [
+   {
+    "name": "OVH IMAP - invoices",
+    "type": "n8n-nodes-base.emailReadImap",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "mailbox": "INBOX/invoices"
+    },
+    "credentials": {
+     "imap": {
+      "id": "cred-imap",
+      "name": "OVH IMAP"
+     }
+    }
+   },
+   {
+    "name": "Dedupe by messageId",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "jsCode": "const seen = new Set(); return items.filter(i => { const id = i.json.messageId; if (seen.has(id)) return false; seen.add(id); return true; });"
+    }
+   },
+   {
+    "name": "POST invoice",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "https://erp.example.ca/api/invoices"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "OVH IMAP - invoices": {
+    "main": [
+     [
+      {
+       "node": "Dedupe by messageId",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Dedupe by messageId": {
+    "main": [
+     [
+      {
+       "node": "POST invoice",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf01",
+  "name": "Invoice readback",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Daily 06:30",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "cronExpression": "0 6 * * *"
+    }
+   },
+   {
+    "name": "GET invoices",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "method": "GET",
+     "url": "https://erp.example.ca/api/invoices"
+    }
+   },
+   {
+    "name": "Append to sheet",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "append",
+     "spreadsheetId": "{{$env.LEDGER_ID}}"
+    },
+    "retryOnFail": true,
+    "onError": "continueErrorOutput"
+   }
+  ],
+  "connections": {
+   "Daily 06:30": {
+    "main": [
+     [
+      {
+       "node": "GET invoices",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "GET invoices": {
+    "main": [
+     [
+      {
+       "node": "Append to sheet",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf02",
+  "name": "Sheet reader",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Hourly",
+    "type": "n8n-nodes-base.interval",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "interval": 60
+    }
+   },
+   {
+    "name": "Read ledger",
+    "type": "n8n-nodes-base.googleSheets",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "operation": "read",
+     "spreadsheetId": "{{$env.LEDGER_ID}}"
+    }
+   },
+   {
+    "name": "Filter PDFs",
+    "type": "n8n-nodes-base.filter",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "conditions": {
+      "string": [
+       {
+        "value1": "={{$json.fileName}}",
+        "operation": "contains",
+        "value2": ".pdf"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "Hold others",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "values": {
+      "string": [
+       {
+        "name": "hold",
+        "value": "yes"
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "connections": {
+   "Hourly": {
+    "main": [
+     [
+      {
+       "node": "Read ledger",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Read ledger": {
+    "main": [
+     [
+      {
+       "node": "Filter PDFs",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Filter PDFs": {
+    "main": [
+     [
+      {
+       "node": "Hold others",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Hold others",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "wf03",
+  "name": "Router",
+  "active": true,
+  "nodes": [
+   {
+    "name": "Webhook - requests",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "path": "requests"
+    }
+   },
+   {
+    "name": "Route",
+    "type": "n8n-nodes-base.switch",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "rules": {
+      "values": [
+       {
+        "conditions": {
+         "string": [
+          {
+           "value1": "={{$json.type}}",
+           "operation": "equals",
+           "value2": "a"
+          }
+         ]
+        }
+       }
+      ]
+     },
+     "options": {
+      "fallbackOutput": "extra"
+     }
+    }
+   },
+   {
+    "name": "Handle A",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "values": {
+      "string": [
+       {
+        "name": "k",
+        "value": "a"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "Handle rest",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "parameters": {
+     "values": {
+      "string": [
+       {
+        "name": "k",
+        "value": "rest"
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "connections": {
+   "Webhook - requests": {
+    "main": [
+     [
+      {
+       "node": "Route",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Route": {
+    "main": [
+     [
+      {
+       "node": "Handle A",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Handle rest",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  }
+ }
+]
