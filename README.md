@@ -1,5 +1,14 @@
 # automation-audit
 
+
+An evidence-cited audit of an n8n workflow export: every finding re-verifies against the export bytes, so a finding is a citation and not an opinion.
+
+[![CI](https://github.com/devops-gm88/automation-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/devops-gm88/automation-audit/actions/workflows/ci.yml) **24 tests** in CI run [44549742317](https://github.com/devops-gm88/automation-audit/actions/runs/44549742317) - measured: **14/14 findings re-derived** from a 12-workflow, 38-node fixture, 0 clean workflows
+
+```bash
+python3 audit.py audit fixtures/estate_12.json --claims fixtures/claims.json --out out/estate_12
+```
+
 An **evidence-cited audit of an n8n automation estate**. It reads a workflow export, reports what is
 broken or missing, and every finding cites the workflow, the node and a JSON pointer that
 **re-verifies against the export bytes**. If the export changes and a finding can no longer be
